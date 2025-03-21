@@ -8,7 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Union
 
 # 第三方库导入
 import numpy as np
@@ -16,7 +16,7 @@ import pandas as pd
 from sklearn import tree
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix, classification_report
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from sklearn.naive_bayes import ComplementNB
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 import matplotlib.pyplot as plt
@@ -44,23 +44,20 @@ class NumpyEncoder(json.JSONEncoder):
 class BaseModel:
     """基础模型类"""
     
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str, use_hyperopt: bool = False, search_method: str = 'grid'):
         """
         初始化基础模型
         
         Args:
             config_path: 配置文件路径
+            use_hyperopt: 是否使用超参数优化
+            search_method: 超参数搜索方法，'grid' 或 'random'
         """
         self.data_processor = DataProcessor()
         self.config = self._load_config(config_path)
+        self.use_hyperopt = use_hyperopt
+        self.search_method = search_method
         self.models = self._initialize_models()
-        self.model = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=10,
-            min_samples_split=5,
-            min_samples_leaf=2,
-            random_state=42
-        )
         self.scalers = {
             'standard': StandardScaler(),
             'minmax': MinMaxScaler()
@@ -69,19 +66,80 @@ class BaseModel:
         self.logger = setup_logging()
         self.feature_names = None
         self.train_data = None
+        self.best_params = {}
         
     def _load_config(self, config_path: str) -> Dict:
         """加载配置文件"""
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     
-    def _initialize_models(self) -> List[object]:
+    def _get_param_grid(self) -> Dict:
+        """获取超参数搜索空间"""
+        return {
+            'DecisionTreeClassifier': {
+                'criterion': ['gini', 'entropy'],
+                'max_depth': [3, 5, 7, 10, 15],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4]
+            },
+            'ComplementNB': {
+                'alpha': [0.1, 0.5, 1.0, 2.0]
+            },
+            'RandomForestClassifier': {
+                'n_estimators': [50, 100, 200],
+                'max_depth': [5, 10, 15, 20],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4]
+            }
+        }
+    
+    def _initialize_models(self) -> List[Union[GridSearchCV, RandomizedSearchCV, object]]:
         """初始化机器学习模型"""
-        return [
-            tree.DecisionTreeClassifier(criterion="entropy", random_state=30),
-            ComplementNB(),
-            RandomForestClassifier(criterion="entropy", random_state=30)
+        base_models = [
+            ('DecisionTreeClassifier', tree.DecisionTreeClassifier(random_state=30)),
+            ('ComplementNB', ComplementNB()),
+            ('RandomForestClassifier', RandomForestClassifier(random_state=42))
         ]
+        
+        if self.use_hyperopt:
+            param_grid = self._get_param_grid()
+            optimized_models = []
+            
+            for name, model in base_models:
+                if self.search_method == 'grid':
+                    search = GridSearchCV(
+                        model, 
+                        param_grid[name],
+                        cv=5,
+                        scoring='f1_weighted',
+                        n_jobs=-1,
+                        verbose=1
+                    )
+                else:  # random search
+                    search = RandomizedSearchCV(
+                        model,
+                        param_grid[name],
+                        n_iter=20,
+                        cv=5,
+                        scoring='f1_weighted',
+                        n_jobs=-1,
+                        random_state=42,
+                        verbose=1
+                    )
+                optimized_models.append(search)
+            return optimized_models
+        else:
+            return [
+                tree.DecisionTreeClassifier(criterion="entropy", random_state=30),
+                ComplementNB(),
+                RandomForestClassifier(
+                    n_estimators=100,
+                    max_depth=10,
+                    min_samples_split=5,
+                    min_samples_leaf=2,
+                    random_state=42
+                )
+            ]
     
     def _preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -131,14 +189,25 @@ class BaseModel:
         X_scaled_minmax = self.scalers['minmax'].fit_transform(X)
         
         # 训练所有模型
-        for model in self.models:
-            if isinstance(model, ComplementNB):
-                model.fit(X_scaled_minmax, y)
+        for i, model in enumerate(self.models):
+            if isinstance(model, (GridSearchCV, RandomizedSearchCV)):
+                # 使用超参数优化的模型
+                if isinstance(self.models[i], ComplementNB):
+                    model.fit(X_scaled_minmax, y)
+                else:
+                    model.fit(X_scaled_standard, y)
+                
+                # 保存最佳参数
+                self.best_params[type(model.estimator).__name__] = model.best_params_
+                self.logger.info(f"{type(model.estimator).__name__} 最佳参数: {model.best_params_}")
+                self.logger.info(f"{type(model.estimator).__name__} 最佳得分: {model.best_score_:.4f}")
             else:
-                model.fit(X_scaled_standard, y)
+                # 使用默认参数的模型
+                if isinstance(model, ComplementNB):
+                    model.fit(X_scaled_minmax, y)
+                else:
+                    model.fit(X_scaled_standard, y)
         
-        # 训练主模型
-        self.model.fit(X_scaled_standard, y)
         self.logger.info(f"{self.__class__.__name__} 训练完成")
         
     def predict(self, pred_data_path: str, output_dir: str) -> None:
@@ -337,11 +406,19 @@ class BaseModel:
             remediation_metrics = {}
             
             for model in self.models:
+                # 获取实际的模型（如果是搜索器，则获取最佳估计器）
+                if isinstance(model, (GridSearchCV, RandomizedSearchCV)):
+                    actual_model = model.best_estimator_
+                    model_name = type(actual_model).__name__
+                else:
+                    actual_model = model
+                    model_name = type(model).__name__
+                
                 # 根据模型类型选择特征缩放方法
-                X_test_scaled = X_test_scaled_minmax if isinstance(model, ComplementNB) else X_test_scaled_standard
+                X_test_scaled = X_test_scaled_minmax if isinstance(actual_model, ComplementNB) else X_test_scaled_standard
                 
                 # 预测
-                y_pred = model.predict(X_test_scaled)
+                y_pred = actual_model.predict(X_test_scaled)
                 
                 # 计算整体评估指标
                 accuracy = accuracy_score(y_test, y_pred)
@@ -351,7 +428,6 @@ class BaseModel:
                 total_samples = len(y_test)
                 
                 # 记录评估结果
-                model_name = type(model).__name__
                 self.logger.info(f"{self.__class__.__name__} {model_name} 评估结果:")
                 self.logger.info(f"总样本量: {total_samples}")
                 self.logger.info(f"准确率: {accuracy:.4f}")
@@ -439,41 +515,12 @@ class BaseModel:
             report_df.to_csv(report_path, sep=',', encoding='utf-8-sig', index=False)
             print(f"\n模型比较结果已保存至: {report_path}")
             
-            # 整合所有修复技术的评估指标
-            all_tech_metrics = []
-            for model in self.models:
-                model_name = type(model).__name__
-                for label in sorted(remediation_metrics.keys()):
-                    # 找到当前模型对应的指标
-                    model_metrics = next(
-                        metrics for metrics in remediation_metrics[label] 
-                        if metrics['模型'] == model_name
-                    )
-                    
-                    # 添加到列表中
-                    metrics_row = {
-                        '模型': model_name,
-                        '修复技术': label,
-                        '总样本量': model_metrics['总样本量'],
-                        '正确预测数': model_metrics['正确预测为该技术'],
-                        '正确预测其他数': model_metrics['正确预测为其他技术'],
-                        '错误预测数': model_metrics['错误预测为该技术'],
-                        '漏判数': model_metrics['错误预测为其他技术'],
-                        '准确率': model_metrics['准确率'],
-                        '精确率': model_metrics['精确率'],
-                        '召回率': model_metrics['召回率'],
-                        'F1分数': model_metrics['F1分数'],
-                        '特异度': model_metrics['特异度']
-                    }
-                    all_tech_metrics.append(metrics_row)
-            
-            # 保存所有修复技术的评估指标到一个CSV文件
-            tech_metrics_df = pd.DataFrame(all_tech_metrics)
-            tech_metrics_path = os.path.join(eval_output_dir, 'remediation_techniques_evaluation.csv')
-            tech_metrics_df.to_csv(tech_metrics_path, sep=',', encoding='utf-8-sig', index=False)
-            print(f"\n所有修复技术的评估指标已保存至: {tech_metrics_path}")
-            
-            return all_results
+            # 如果使用了超参数优化，保存最佳参数
+            if self.use_hyperopt:
+                best_params_path = os.path.join(eval_output_dir, 'best_parameters.json')
+                with open(best_params_path, 'w', encoding='utf-8') as f:
+                    json.dump(self.best_params, f, ensure_ascii=False, indent=4)
+                print(f"\n最佳超参数已保存至: {best_params_path}")
             
         except Exception as e:
             self.logger.error(f"评估{self.__class__.__name__}时发生错误: {str(e)}")

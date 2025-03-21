@@ -1,7 +1,7 @@
 numpy>=1.21.0
 pandas>=1.3.0
 scikit-learn>=0.24.2
-matplotlib>=3.4.0
-seaborn>=0.11.0
+matplotlib>=3.4.3
+seaborn>=0.11.2
 openpyxl>=3.0.0  # 用于读取 Excel 文件
 typing-extensions>=4.0.0  # 增强的类型提示支持 
