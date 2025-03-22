@@ -66,7 +66,13 @@ class BaseModel:
         self.logger = setup_logging()
         self.feature_names = None
         self.train_data = None
+        self.val_data = None
+        self.test_data = None
         self.best_params = {}
+        
+        # 设置matplotlib中文字体
+        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS', 'SimSun']
+        plt.rcParams['axes.unicode_minus'] = False
         
     def _load_config(self, config_path: str) -> Dict:
         """加载配置文件"""
@@ -181,32 +187,45 @@ class BaseModel:
         train_df = self._preprocess_data(train_df)
         X, y = self.data_processor.prepare_training_data(train_df)
         
-        # 保存训练数据用于评估
-        self.train_data = (X, y)
+        # 划分训练集、验证集和测试集
+        X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.25, random_state=42)
+        
+        # 保存数据集
+        self.train_data = (X_train, y_train)
+        self.val_data = (X_val, y_val)
+        self.test_data = (X_test, y_test)
         
         # 标准化特征
-        X_scaled_standard = self.scalers['standard'].fit_transform(X)
-        X_scaled_minmax = self.scalers['minmax'].fit_transform(X)
+        X_train_scaled_standard = self.scalers['standard'].fit_transform(X_train)
+        X_train_scaled_minmax = self.scalers['minmax'].fit_transform(X_train)
+        X_val_scaled_standard = self.scalers['standard'].transform(X_val)
+        X_val_scaled_minmax = self.scalers['minmax'].transform(X_val)
         
         # 训练所有模型
         for i, model in enumerate(self.models):
             if isinstance(model, (GridSearchCV, RandomizedSearchCV)):
                 # 使用超参数优化的模型
                 if isinstance(self.models[i], ComplementNB):
-                    model.fit(X_scaled_minmax, y)
+                    model.fit(X_train_scaled_minmax, y_train)
+                    val_score = model.score(X_val_scaled_minmax, y_val)
                 else:
-                    model.fit(X_scaled_standard, y)
+                    model.fit(X_train_scaled_standard, y_train)
+                    val_score = model.score(X_val_scaled_standard, y_val)
                 
-                # 保存最佳参数
+                # 保存最佳参数和验证集得分
                 self.best_params[type(model.estimator).__name__] = model.best_params_
                 self.logger.info(f"{type(model.estimator).__name__} 最佳参数: {model.best_params_}")
-                self.logger.info(f"{type(model.estimator).__name__} 最佳得分: {model.best_score_:.4f}")
+                self.logger.info(f"{type(model.estimator).__name__} 验证集得分: {val_score:.4f}")
             else:
                 # 使用默认参数的模型
                 if isinstance(model, ComplementNB):
-                    model.fit(X_scaled_minmax, y)
+                    model.fit(X_train_scaled_minmax, y_train)
+                    val_score = model.score(X_val_scaled_minmax, y_val)
                 else:
-                    model.fit(X_scaled_standard, y)
+                    model.fit(X_train_scaled_standard, y_train)
+                    val_score = model.score(X_val_scaled_standard, y_val)
+                self.logger.info(f"{type(model).__name__} 验证集得分: {val_score:.4f}")
         
         self.logger.info(f"{self.__class__.__name__} 训练完成")
         
@@ -331,10 +350,6 @@ class BaseModel:
         plt.figure(figsize=(10, 8))
         sns.set_theme(style="white")
         
-        # 设置中文字体
-        plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']
-        plt.rcParams['axes.unicode_minus'] = False
-        
         # 绘制混淆矩阵热力图
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                    xticklabels=unique_labels,
@@ -383,15 +398,10 @@ class BaseModel:
             output_dir: 输出目录
         """
         try:
-            if self.train_data is None:
+            if self.test_data is None:
                 raise ValueError("模型尚未训练，请先训练模型")
                 
-            X, y = self.train_data
-            
-            # 划分训练集和测试集
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
-            )
+            X_test, y_test = self.test_data
             
             # 标准化特征
             X_test_scaled_standard = self.scalers['standard'].transform(X_test)
@@ -428,7 +438,7 @@ class BaseModel:
                 total_samples = len(y_test)
                 
                 # 记录评估结果
-                self.logger.info(f"{self.__class__.__name__} {model_name} 评估结果:")
+                self.logger.info(f"{self.__class__.__name__} {model_name} 测试集评估结果:")
                 self.logger.info(f"总样本量: {total_samples}")
                 self.logger.info(f"准确率: {accuracy:.4f}")
                 self.logger.info(f"精确率: {precision:.4f}")
