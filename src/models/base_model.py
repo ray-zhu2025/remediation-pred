@@ -21,10 +21,15 @@ from sklearn.naive_bayes import ComplementNB
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
+import platform
+import matplotlib.font_manager as fm
+import logging
+from datetime import datetime
 
 # 本地应用导入
 from src.process.data_processor import DataProcessor
 from src.utils.logging import setup_logging
+from src.models.model_explainer import ModelExplainer
 
 # 添加项目根目录到 Python 路径
 project_root = str(Path(__file__).parent.parent.parent)
@@ -336,36 +341,89 @@ class BaseModel:
             '特异度': specificity
         }
     
-    def _save_confusion_matrix_plot(self, cm: np.ndarray, unique_labels: np.ndarray, 
-                                  model_name: str, eval_output_dir: str) -> None:
-        """
-        保存混淆矩阵图
+    def _setup_chinese_font(self) -> None:
+        """设置中文字体"""
+        # 获取系统信息
+        system = platform.system()
         
-        Args:
-            cm: 混淆矩阵
-            unique_labels: 唯一的标签值
-            model_name: 模型名称
-            eval_output_dir: 评估结果输出目录
-        """
+        if system == 'Darwin':  # macOS
+            plt.rcParams['font.sans-serif'] = [
+                'PingFang HK',  # 苹方
+                'STHeiti',      # 华文黑体
+                'STKaiti',      # 华文楷体
+                'STSong',       # 华文宋体
+                'STFangsong',   # 华文仿宋
+                'Arial Unicode MS'  # 作为后备字体
+            ]
+        elif system == 'Windows':
+            plt.rcParams['font.sans-serif'] = [
+                'Microsoft YaHei',  # 微软雅黑
+                'SimHei',           # 黑体
+                'SimSun',           # 宋体
+                'KaiTi'             # 楷体
+            ]
+        else:  # Linux
+            plt.rcParams['font.sans-serif'] = [
+                'WenQuanYi Micro Hei',  # 文泉驿微米黑
+                'Noto Sans CJK SC',     # Noto Sans CJK
+                'Droid Sans Fallback'    # Droid Sans
+            ]
+        
+        # 设置负号显示
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        # 验证字体是否可用
+        self._verify_fonts()
+
+    def _verify_fonts(self) -> None:
+        """验证字体是否可用"""
+        # 获取系统所有字体
+        system_fonts = [f.name for f in fm.fontManager.ttflist]
+        
+        # 检查每个中文字体是否可用
+        available_fonts = []
+        for font in plt.rcParams['font.sans-serif']:
+            if font in system_fonts:
+                available_fonts.append(font)
+                self.logger.info(f"字体 {font} 可用")
+            else:
+                self.logger.warning(f"字体 {font} 不可用")
+        
+        if not available_fonts:
+            self.logger.error("没有可用的中文字体！")
+            raise RuntimeError("没有可用的中文字体，请安装中文字体后重试")
+        
+        # 更新字体列表，只使用可用的字体
+        plt.rcParams['font.sans-serif'] = available_fonts
+        self.logger.info(f"使用以下字体: {', '.join(available_fonts)}")
+
+    def _save_confusion_matrix_plot(self, y_true: np.ndarray, y_pred: np.ndarray, 
+                                  model_name: str, eval_output_dir: str) -> None:
+        """保存混淆矩阵图"""
+        # 设置中文字体
+        self._setup_chinese_font()
+        
+        # 计算混淆矩阵
+        cm = confusion_matrix(y_true, y_pred)
+        
+        # 创建图形
         plt.figure(figsize=(10, 8))
-        sns.set_theme(style="white")
         
         # 绘制混淆矩阵热力图
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                   xticklabels=unique_labels,
-                   yticklabels=unique_labels)
+                    xticklabels=True, yticklabels=True)
         
         # 设置标题和标签
-        plt.title(f'{model_name}修复技术预测混淆矩阵', fontsize=14, pad=20)
-        plt.xlabel('预测标签', fontsize=12)
-        plt.ylabel('真实标签', fontsize=12)
+        plt.title('混淆矩阵', pad=20)
+        plt.xlabel('预测标签')
+        plt.ylabel('真实标签')
         
         # 调整布局
         plt.tight_layout()
         
-        # 保存混淆矩阵图
-        plt.savefig(os.path.join(eval_output_dir, f'confusion_matrix_{model_name}.png'), 
-                   dpi=300, bbox_inches='tight')
+        # 保存图片
+        plt.savefig(os.path.join(eval_output_dir, f'confusion_matrix_{model_name}.png'),
+                    bbox_inches='tight', dpi=300)
         plt.close()
     
     def _print_tech_metrics(self, label: int, metrics: Dict) -> None:
@@ -390,19 +448,20 @@ class BaseModel:
         print(f"  - F1分数: {metrics['F1分数']:.4f}")
         print(f"  - 特异度: {metrics['特异度']:.4f}")
     
-    def evaluate(self, output_dir: str) -> None:
+    def evaluate(self, test_data_path: str, output_dir: str) -> None:
         """
         评估模型性能
         
         Args:
+            test_data_path: 测试数据路径
             output_dir: 输出目录
         """
         try:
-            if self.test_data is None:
-                raise ValueError("模型尚未训练，请先训练模型")
+            # 加载和处理测试数据
+            test_df = self.data_processor.load_data(test_data_path)
+            test_df = self._preprocess_data(test_df)
+            X_test, y_test = self.data_processor.prepare_training_data(test_df)
                 
-            X_test, y_test = self.test_data
-            
             # 标准化特征
             X_test_scaled_standard = self.scalers['standard'].transform(X_test)
             X_test_scaled_minmax = self.scalers['minmax'].transform(X_test)
@@ -483,7 +542,7 @@ class BaseModel:
                     remediation_metrics[label].append(metrics)
                 
                 # 保存混淆矩阵图
-                self._save_confusion_matrix_plot(cm, unique_labels, model_name, eval_output_dir)
+                self._save_confusion_matrix_plot(y_test, y_pred, model_name, eval_output_dir)
                 
                 # 生成分类报告
                 report = classification_report(y_test, y_pred, output_dict=True)
@@ -535,3 +594,37 @@ class BaseModel:
         except Exception as e:
             self.logger.error(f"评估{self.__class__.__name__}时发生错误: {str(e)}")
             raise 
+
+    def explain_model(self, output_dir: str) -> None:
+        """
+        分析模型的可解释性
+        
+        Args:
+            output_dir: 输出目录
+        """
+        if self.train_data is None:
+            raise ValueError("请先训练模型")
+            
+        X_train, _ = self.train_data
+        
+        # 对每个模型进行解释性分析
+        for i, model in enumerate(self.models):
+            if isinstance(model, (GridSearchCV, RandomizedSearchCV)):
+                model = model.best_estimator_
+            
+            model_name = type(model).__name__
+            model_output_dir = os.path.join(output_dir, model_name)
+            
+            # 创建模型解释器
+            explainer = ModelExplainer(model, self.feature_names, model_output_dir)
+            
+            # 进行特征重要性分析
+            explainer.analyze_feature_importance(X_train)
+            
+            # 分析特征影响
+            explainer.analyze_feature_effects(X_train)
+            
+            # 分析特征交互
+            explainer.analyze_interactions(X_train)
+            
+            self.logger.info(f"{model_name} 模型解释性分析完成") 
