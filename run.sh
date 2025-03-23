@@ -54,4 +54,13 @@ groundwater_model.evaluate('data/training/groundwater_training.csv', '$groundwat
 
 echo "[INFO] 所有模型运行完成！"
 echo "[INFO] 结果文件保存在 output/ 目录下"
-echo "[INFO] 模型可解释性分析结果保存在 output/*/explanation/ 目录下" 
+echo "[INFO] 模型可解释性分析结果保存在 output/*/explanation/ 目录下"
+
+# 设置项目根目录
+PROJECT_ROOT="/Users/evanzhu/Desktop/GitHub/污染场地智能决策模型"
+
+# 设置Python路径
+export PYTHONPATH=$PROJECT_ROOT:$PYTHONPATH
+
+# 运行模型比较程序
+python $PROJECT_ROOT/src/models/model_comparison.py 
