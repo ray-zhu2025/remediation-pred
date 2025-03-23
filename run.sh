@@ -39,7 +39,7 @@ from src.models.soil_model import SoilModel
 soil_model = SoilModel('src/config/soil/parameters.json')
 soil_model.train('data/training/soil_training.csv')
 soil_model.evaluate('data/training/soil_training.csv', '$soil_output_dir')
-soil_model.explain_model('$soil_output_dir/explanation')
+# soil_model.explain_model('$soil_output_dir/explanation')
 "
 
 # 训练和评估地下水模型
@@ -49,7 +49,7 @@ from src.models.groundwater_model import GroundwaterModel
 groundwater_model = GroundwaterModel('src/config/groundwater/parameters.json')
 groundwater_model.train('data/training/groundwater_training.csv')
 groundwater_model.evaluate('data/training/groundwater_training.csv', '$groundwater_output_dir')
-groundwater_model.explain_model('$groundwater_output_dir/explanation')
+# groundwater_model.explain_model('$groundwater_output_dir/explanation')
 "
 
 echo "[INFO] 所有模型运行完成！"
