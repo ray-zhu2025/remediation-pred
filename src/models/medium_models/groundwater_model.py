@@ -64,11 +64,11 @@ class GroundwaterModel:
     
     def _initialize_models(self) -> List:
         """初始化基础模型"""
-        return ModelFactory.create_models(
-            model_types=self.model_types,
-            use_hyperopt=self.use_hyperopt,
-            search_method=self.search_method
-        )
+        models = ModelFactory.create_models(use_hyperopt=self.use_hyperopt)
+        # 如果指定了模型类型，只返回指定的模型
+        if self.model_types:
+            return [models[model_type] for model_type in self.model_types]
+        return list(models.values())
     
     def _preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """预处理数据"""
@@ -108,7 +108,7 @@ class GroundwaterModel:
         
         # 训练所有模型
         for model in self.models:
-            model.train(X_train, y_train, X_val, y_val)
+            model.fit(X_train, y_train)
         
         self.logger.info(f"{self.__class__.__name__} 训练完成")
     

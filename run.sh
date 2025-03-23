@@ -32,35 +32,16 @@ python3 -c "import shap" 2>/dev/null || {
     pip3 install shap
 }
 
-# 训练和评估土壤模型
-echo "训练土壤模型..."
-python3 -c "
-from src.models.soil_model import SoilModel
-soil_model = SoilModel('src/config/soil/parameters.json')
-soil_model.train('data/training/soil_training.csv')
-soil_model.evaluate('data/training/soil_training.csv', '$soil_output_dir')
-# soil_model.explain_model('$soil_output_dir/explanation')
-"
-
-# 训练和评估地下水模型
-echo "训练地下水模型..."
-python3 -c "
-from src.models.groundwater_model import GroundwaterModel
-groundwater_model = GroundwaterModel('src/config/groundwater/parameters.json')
-groundwater_model.train('data/training/groundwater_training.csv')
-groundwater_model.evaluate('data/training/groundwater_training.csv', '$groundwater_output_dir')
-# groundwater_model.explain_model('$groundwater_output_dir/explanation')
-"
-
-echo "[INFO] 所有模型运行完成！"
-echo "[INFO] 结果文件保存在 output/ 目录下"
-echo "[INFO] 模型可解释性分析结果保存在 output/*/explanation/ 目录下"
-
 # 设置项目根目录
-PROJECT_ROOT="/Users/evanzhu/Desktop/GitHub/污染场地智能决策模型"
+PROJECT_ROOT="$SCRIPT_DIR"
 
 # 设置Python路径
 export PYTHONPATH=$PROJECT_ROOT:$PYTHONPATH
 
-# 运行模型比较程序
-python $PROJECT_ROOT/src/models/model_comparison.py 
+# 运行主程序
+echo "[INFO] 运行主程序..."
+python3 src/main.py
+
+echo "[INFO] 所有模型运行完成！"
+echo "[INFO] 结果文件保存在 output/ 目录下"
+echo "[INFO] 模型可解释性分析结果保存在 output/*/explanation/ 目录下" 

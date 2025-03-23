@@ -22,14 +22,34 @@ wheels/
 .installed.cfg
 *.egg
 
+# Virtual Environment
+venv/
+env/
+ENV/
+
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# OS
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+logs/
+output/logs/
+
+# Output
+output/soil/
+output/groundwater/
+output/analysis/
+output/docs/
+
+# OS
 .DS_Store?
 ._*
 .Spotlight-V100
@@ -38,8 +58,6 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-output/
-*.log
 *.csv
 *.xlsx
 *.json
