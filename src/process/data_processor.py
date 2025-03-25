@@ -191,18 +191,25 @@ class DataProcessor:
         y = self.label_encoder.fit_transform(data['修复技术'])
         
         # 根据数据集类型选择要删除的列
-        columns_to_drop = ['修复技术']
+        columns_to_drop = ['修复技术', '场地名称', '场地分区']  # 公共列
         if dataset_type == 'soil':
-            columns_to_drop.extend(['修复面积', '修复土方量', '修复时间', '修复成本'])
+            # 土壤数据需要过滤的特征
+            soil_drop_columns = [
+                '修复时间', '费用', '修复面积', '修复土方量', '修复成本'
+            ]
+            columns_to_drop.extend(soil_drop_columns)
         else:
-            # 检查列是否存在
-            columns_to_drop.extend(['修复时间'])
-            if '修复体积' in data.columns:
-                columns_to_drop.append('修复体积')
-            if '修复成本' in data.columns:
-                columns_to_drop.append('修复成本')
+            # 地下水数据需要过滤的特征
+            groundwater_drop_columns = [
+                '修复时间', '费用'
+            ]
+            columns_to_drop.extend(groundwater_drop_columns)
             
+        # 删除指定的列
         X = data.drop(columns=[col for col in columns_to_drop if col in data.columns], axis=1)
+        
+        # 记录被删除的特征
+        self.logger.info(f"删除的特征: {[col for col in columns_to_drop if col in data.columns]}")
         
         # 特征选择
         X = self._select_features(X, dataset_type)
