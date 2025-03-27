@@ -35,8 +35,14 @@ ENV/
 
 # macOS
 .DS_Store
+.DS_Store?
 .AppleDouble
 .LSOverride
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Logs
 *.log
@@ -48,14 +54,6 @@ output/soil/
 output/groundwater/
 output/analysis/
 output/docs/
-
-# OS
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 
 # Project specific
 *.csv
