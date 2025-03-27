@@ -48,6 +48,7 @@ Thumbs.db
 *.log
 logs/
 output/logs/
+output/*/logs/
 
 # Output
 output/soil/
