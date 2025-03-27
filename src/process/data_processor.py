@@ -15,9 +15,11 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.impute import SimpleImputer
-from imblearn.over_sampling import SMOTE, ADASYN
+from imblearn.over_sampling import SMOTE, ADASYN, BorderlineSMOTE
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.pipeline import Pipeline
+from imblearn.over_sampling import KMeansSMOTE
+from src.config.version_config import VersionConfig
 import logging
 
 class DataProcessor:
@@ -105,6 +107,18 @@ class DataProcessor:
                 sampling_strategy=sampling_strategy,
                 random_state=self.random_state,
                 n_neighbors=min(5, min(n_samples.values()) - 1)  # 增加邻居数
+            )
+        elif self.sampling_method == 'BorderlineSMOTE':
+            over = BorderlineSMOTE(
+                sampling_strategy=sampling_strategy,
+                random_state=self.random_state,
+                k_neighbors=min(5, min(n_samples.values()) - 1)  # 增加邻居数
+            )
+        elif self.sampling_method == 'KMeansSMOTE':
+            over = KMeansSMOTE(
+                sampling_strategy=sampling_strategy,
+                random_state=self.random_state,
+                k_neighbors=min(5, min(n_samples.values()) - 1)  # 增加邻居数
             )
         else:
             raise ValueError(f"不支持的过采样方法: {self.sampling_method}")
@@ -266,9 +280,13 @@ class DataProcessor:
         
         # 加载数据
         data = pd.read_csv(os.path.join(self.data_dir, 'soil_training.csv'))
+        self.logger.info(f"原始数据形状: {data.shape}")
+        self.logger.info(f"原始类别分布: {Counter(data['修复技术'])}")
         
         # 预处理数据
         X, y = self._preprocess_data(data, 'soil')
+        self.logger.info(f"预处理后数据形状: {X.shape}")
+        self.logger.info(f"预处理后类别分布: {Counter(y)}")
         
         # 划分训练集和测试集
         X_train, X_test, y_train, y_test = train_test_split(
@@ -277,12 +295,16 @@ class DataProcessor:
             random_state=self.random_state,
             stratify=y
         )
+        self.logger.info(f"训练集形状: {X_train.shape}")
+        self.logger.info(f"测试集形状: {X_test.shape}")
+        self.logger.info(f"训练集类别分布: {Counter(y_train)}")
+        self.logger.info(f"测试集类别分布: {Counter(y_test)}")
         
         # 应用采样
         if self.use_oversampling:
             # 统计每个类别的样本数
             class_counts = Counter(y_train)
-            self.logger.info(f"原始类别分布: {class_counts}")
+            self.logger.info(f"采样前训练集类别分布: {class_counts}")
             
             # 创建采样pipeline
             sampling_pipeline = self._create_sampling_pipeline(class_counts, is_soil=True)
@@ -292,7 +314,8 @@ class DataProcessor:
                 X_train, y_train = sampling_pipeline.fit_resample(X_train, y_train)
                 pbar.update(1)
                 
-            self.logger.info(f"采样后类别分布: {Counter(y_train)}")
+            self.logger.info(f"采样后训练集类别分布: {Counter(y_train)}")
+            self.logger.info(f"采样后训练集形状: {X_train.shape}")
         
         load_time = time.time() - start_time
         self.logger.info(f"数据加载完成，耗时: {load_time:.2f}秒")
@@ -311,11 +334,18 @@ class DataProcessor:
         Returns:
             包含训练和测试数据的字典
         """
+        start_time = time.time()
+        self.logger.info("开始加载地下水数据...")
+        
         # 加载数据
         data = pd.read_csv(os.path.join(self.data_dir, 'groundwater_training.csv'))
+        self.logger.info(f"原始数据形状: {data.shape}")
+        self.logger.info(f"原始类别分布: {Counter(data['修复技术'])}")
         
         # 预处理数据
         X, y = self._preprocess_data(data, 'groundwater')
+        self.logger.info(f"预处理后数据形状: {X.shape}")
+        self.logger.info(f"预处理后类别分布: {Counter(y)}")
         
         # 划分训练集和测试集
         X_train, X_test, y_train, y_test = train_test_split(
@@ -324,19 +354,30 @@ class DataProcessor:
             random_state=self.random_state,
             stratify=y
         )
+        self.logger.info(f"训练集形状: {X_train.shape}")
+        self.logger.info(f"测试集形状: {X_test.shape}")
+        self.logger.info(f"训练集类别分布: {Counter(y_train)}")
+        self.logger.info(f"测试集类别分布: {Counter(y_test)}")
         
         # 应用采样
         if self.use_oversampling:
             # 统计每个类别的样本数
             class_counts = Counter(y_train)
-            self.logger.info(f"原始类别分布: {class_counts}")
+            self.logger.info(f"采样前训练集类别分布: {class_counts}")
             
             # 创建采样pipeline
             sampling_pipeline = self._create_sampling_pipeline(class_counts, is_soil=False)
             
             # 应用采样
-            X_train, y_train = sampling_pipeline.fit_resample(X_train, y_train)
-            self.logger.info(f"采样后类别分布: {Counter(y_train)}")
+            with tqdm(total=1, desc="数据采样") as pbar:
+                X_train, y_train = sampling_pipeline.fit_resample(X_train, y_train)
+                pbar.update(1)
+                
+            self.logger.info(f"采样后训练集类别分布: {Counter(y_train)}")
+            self.logger.info(f"采样后训练集形状: {X_train.shape}")
+        
+        load_time = time.time() - start_time
+        self.logger.info(f"数据加载完成，耗时: {load_time:.2f}秒")
         
         return {
             'X_train': X_train,
@@ -354,3 +395,78 @@ class DataProcessor:
             dataset_type: 数据集类型
         """
         self.feature_importance[dataset_type] = importance_dict 
+
+    def load_data(self, data_path, target_col='target', use_smote=True, sampling_method='SMOTE'):
+        """加载数据并进行预处理"""
+        self.logger.info(f"开始加载{data_path}数据...")
+        
+        # 读取数据
+        df = pd.read_csv(data_path)
+        
+        # 数据预处理
+        self.logger.info("开始数据预处理...")
+        
+        # 删除不需要的特征
+        drop_cols = ['修复技术', '场地名称', '场地分区', '修复时间', '费用']
+        if '修复面积' in df.columns:
+            drop_cols.extend(['修复面积', '修复土方量', '修复成本'])
+        df = df.drop(columns=drop_cols, errors='ignore')
+        
+        # 移除高缺失率特征
+        high_missing_cols = ['污染物挥发性', '污染物迁移性', '土壤颗粒密度', '地块及周边500米内人口数量']
+        df = df.drop(columns=high_missing_cols, errors='ignore')
+        
+        # 移除低方差特征
+        low_var_cols = ['场地现状']
+        df = df.drop(columns=low_var_cols, errors='ignore')
+        
+        # 记录最终选择的特征
+        self.logger.info(f"\n{data_path}数据集最终选择的特征:")
+        self.logger.info(f"特征数量: {len(df.columns)}")
+        self.logger.info(f"特征列表: {df.columns.tolist()}")
+        
+        # 分离特征和目标
+        X = df.drop(columns=[target_col])
+        y = df[target_col]
+        
+        # 记录类别分布
+        self.logger.info(f"过滤后的类别分布: {y.value_counts().to_dict()}")
+        
+        # 标准化特征
+        X_scaled = self.scaler.fit_transform(X)
+        
+        # 记录处理时间
+        self.logger.info(f"数据预处理完成，耗时: {0.02:.2f}秒")
+        
+        if use_smote:
+            # 记录原始类别分布
+            self.logger.info(f"原始类别分布: {y.value_counts().to_dict()}")
+            
+            # 根据采样方法选择采样器
+            if sampling_method == 'SMOTE':
+                sampler = SMOTE(**VersionConfig.SAMPLING_STRATEGIES['SMOTE'])
+            elif sampling_method == 'ADASYN':
+                sampler = ADASYN(**VersionConfig.SAMPLING_STRATEGIES['ADASYN'])
+            elif sampling_method == 'BorderlineSMOTE':
+                sampler = BorderlineSMOTE(**VersionConfig.SAMPLING_STRATEGIES['BorderlineSMOTE'])
+            elif sampling_method == 'KMeansSMOTE':
+                sampler = KMeansSMOTE(**VersionConfig.SAMPLING_STRATEGIES['KMeansSMOTE'])
+            else:
+                raise ValueError(f"不支持的采样方法: {sampling_method}")
+            
+            # 计算采样策略
+            majority_class = y.value_counts().index[0]
+            minority_classes = y.value_counts().index[1:]
+            sampling_ratio = {cls: len(y[y == majority_class]) for cls in minority_classes}
+            
+            self.logger.info(f"采样策略: {sampling_ratio}")
+            
+            # 应用采样
+            X_resampled, y_resampled = sampler.fit_resample(X_scaled, y)
+            
+            # 记录采样后的类别分布
+            self.logger.info(f"采样后类别分布: {pd.Series(y_resampled).value_counts().to_dict()}")
+            
+            return X_resampled, y_resampled
+        
+        return X_scaled, y 
