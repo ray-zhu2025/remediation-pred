@@ -44,23 +44,30 @@ class BaseModel:
         self.enable_explanation = enable_explanation
         self.model_type = model_type
         self.predictor = None
+        self.model_path = self._get_path("models", "")
+        
+        # 配置日志记录器
         self.logger = logging.getLogger(self.__class__.__name__)
+        self._setup_logging()
         
-    def train(self, X_train: np.ndarray, y_train: np.ndarray):
-        """
-        训练模型
+    def _setup_logging(self):
+        """配置日志记录器"""
+        if not self.logger.handlers:
+            self.logger.setLevel(logging.INFO)
+            # 使用主程序的日志处理器
+            self.logger.handlers = logging.getLogger('__main__').handlers
         
-        Args:
-            X_train: 训练特征
-            y_train: 训练标签
-        """
+    def train(self, X_train, y_train, X_test, y_test):
+        """训练模型"""
         self.logger.info("开始训练模型...")
         
-        # 获取系统信息
+        # 记录系统资源信息
         self._log_system_info()
         
-        # 创建保存路径
-        save_path = self._get_save_path()
+        # 设置模型保存路径
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        save_path = os.path.join('models', self.model_type, f'v{self.version}', timestamp)
+        os.makedirs(save_path, exist_ok=True)
         self.logger.info(f"模型将保存到: {save_path}")
         
         # 转换数据格式
@@ -82,6 +89,29 @@ class BaseModel:
             presets=self.presets,
             num_cpus='auto'
         )
+        
+        # 记录每个模型的性能指标
+        self.logger.info("记录各个模型的性能指标...")
+        leaderboard = self.predictor.leaderboard()
+        self.logger.info("\n模型性能指标:")
+        self.logger.info("-" * 80)
+        self.logger.info(f"{'模型名称':<30} {'验证集得分':<10} {'训练时间(秒)':<15}")
+        self.logger.info("-" * 80)
+        
+        for _, row in leaderboard.iterrows():
+            model_name = row['model']
+            score_val = row['score_val']
+            fit_time = row['fit_time']
+            self.logger.info(f"{model_name:<30} {score_val:<10.4f} {fit_time:<15.2f}")
+        
+        self.logger.info("-" * 80)
+        
+        # 记录模型集成权重
+        self.logger.info("\n模型集成权重:")
+        self.logger.info("-" * 80)
+        best_model = self.predictor.model_best
+        self.logger.info(f"最佳模型: {best_model}")
+        self.logger.info("-" * 80)
         
         self.logger.info("模型训练完成")
         
@@ -105,61 +135,77 @@ class BaseModel:
         predictions = self.predictor.predict(test_data)
         return predictions.values
         
-    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
-        """
-        评估模型
-        
-        Args:
-            X_test: 测试特征
-            y_test: 测试标签
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """评估模型性能"""
+        # 确保输入数据格式正确
+        if not isinstance(X_test, pd.DataFrame):
+            X_test = pd.DataFrame(X_test)
+        if not isinstance(y_test, pd.Series):
+            y_test = pd.Series(y_test)
             
-        Returns:
-            评估指标
-        """
-        self.logger.info("开始评估模型...")
-        
         # 预测
-        y_pred = self.predict(X_test)
+        y_pred = self.predictor.predict(X_test)
         
         # 计算评估指标
         metrics = {
             'accuracy': accuracy_score(y_test, y_pred),
-            'classification_report': classification_report(y_test, y_pred, output_dict=True)
+            'classification_report': classification_report(y_test, y_pred, output_dict=True),
+            'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
+            'model_info': {
+                'version': self.version,
+                'type': self.model_type,
+                'best_model': self.predictor.model_best,
+                'all_models': self._get_model_performance()
+            }
         }
-        
-        # 保存评估指标
-        metrics_path = self._get_metrics_path()
-        os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
-        with open(metrics_path, 'w') as f:
-            json.dump(metrics, f, indent=4)
-            
-        self.logger.info(f"准确率: {metrics['accuracy']:.4f}")
-        self.logger.info(f"评估指标已保存到: {metrics_path}")
         
         return metrics
         
-    def get_model_details(self) -> Dict[str, Any]:
+    def get_model_info(self, detailed: bool = False) -> Dict:
         """
-        获取模型详细信息
+        获取模型信息
         
+        Args:
+            detailed: 是否获取详细信息
+            
         Returns:
             模型信息字典
         """
         if self.predictor is None:
             raise ValueError("模型未训练")
             
-        # 获取模型信息
         leaderboard = self.predictor.leaderboard()
-        model_info = {
+        base_info = {
             'version': self.version,
             'type': self.model_type,
             'best_model': leaderboard.iloc[0]['model'],
             'validation_score': leaderboard.iloc[0]['score_val'],
-            'fit_time': leaderboard.iloc[0]['fit_time'],
-            'pred_time': leaderboard.iloc[0]['pred_time_val']
+            'fit_time': leaderboard.iloc[0]['fit_time']
         }
         
-        return model_info
+        if detailed:
+            base_info['all_models'] = leaderboard[[
+                'model', 'score_val', 'fit_time', 'pred_time_val'
+            ]].to_dict('records')
+            
+            # 记录详细信息
+            self.logger.info(f"\n{self.model_type.capitalize()}模型性能汇总报告:")
+            self.logger.info("=" * 50)
+            self.logger.info(f"模型总数: {len(leaderboard)}")
+            self.logger.info(f"最佳模型: {base_info['best_model']}")
+            self.logger.info(f"最佳验证集得分: {base_info['validation_score']:.4f}")
+            self.logger.info(f"平均训练时间: {leaderboard['fit_time'].mean():.2f}秒")
+            self.logger.info(f"平均预测时间: {leaderboard['pred_time_val'].mean():.2f}秒")
+            self.logger.info("-" * 50)
+            
+            for model in base_info['all_models']:
+                self.logger.info(f"模型: {model['model']}")
+                self.logger.info(f"  验证集得分: {model['score_val']:.4f}")
+                self.logger.info(f"  训练时间: {model['fit_time']:.2f}秒")
+                self.logger.info(f"  预测时间: {model['pred_time_val']:.2f}秒")
+                self.logger.info("-" * 50)
+        
+        return base_info
         
     def plot_feature_importance(self, save_path: str):
         """
@@ -203,21 +249,42 @@ class BaseModel:
                         f"可用={disk.free/1024/1024/1024:.1f}GB, "
                         f"使用率={disk.percent}%")
                         
-    def _get_save_path(self) -> str:
-        """获取模型保存路径"""
+    def _get_path(self, base_dir: str, suffix: str) -> str:
+        """生成带时间戳的路径"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return os.path.join(
-            "models",
+            base_dir,
             self.model_type,
             f"v{self.version}",
-            timestamp
+            f"{timestamp}{suffix}"
         )
         
-    def _get_metrics_path(self) -> str:
-        """获取评估指标保存路径"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return os.path.join(
-            "output",
-            "metrics",
-            f"{self.model_type}_v{self.version}_{timestamp}.json"
-        ) 
+    def _save_metrics(self, metrics):
+        """保存评估指标"""
+        # 创建保存目录
+        save_dir = f'output/metrics/{self.model_type}'
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        save_path = f'{save_dir}/model_metrics_v{VersionConfig.get_version()}_{timestamp}.json'
+        
+        # 保存指标
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(metrics, f, ensure_ascii=False, indent=2)
+        self.logger.info(f"评估指标已保存到: {save_path}")
+        
+    def _get_model_performance(self) -> List[Dict[str, Any]]:
+        """获取所有模型的性能指标"""
+        if self.predictor is None:
+            raise ValueError("模型未训练")
+            
+        leaderboard = self.predictor.leaderboard()
+        model_info = []
+        for _, row in leaderboard.iterrows():
+            model_info.append({
+                'model_name': row['model'],
+                'validation_score': row['score_val'],
+                'fit_time': row['fit_time']
+            })
+        return model_info 

@@ -26,6 +26,7 @@ class SoilModel(BaseModel):
             model_type=model_type
         )
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.model_type = "soil"
     
     def explain_model(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, Any]:
         """解释模型预测"""
@@ -45,3 +46,7 @@ class SoilModel(BaseModel):
         self.logger.info(f"模型详细信息: {model_details}")
         
         return model_details 
+
+    def train(self, X_train, y_train, X_test, y_test):
+        """训练土壤模型"""
+        super().train(X_train, y_train, X_test, y_test) 

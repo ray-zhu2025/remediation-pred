@@ -29,8 +29,8 @@ class DataProcessor:
                  data_dir: str = 'data/training',
                  test_size: float = 0.2,
                  random_state: int = 42,
-                 use_oversampling: bool = False,
-                 sampling_method: str = 'smote',
+                 use_oversampling: bool = True,
+                 sampling_method: str = None,
                  sampling_strategy: str = 'auto',
                  min_samples: int = 30,
                  cv_folds: int = 5):
@@ -42,7 +42,7 @@ class DataProcessor:
             test_size: 测试集比例
             random_state: 随机种子
             use_oversampling: 是否使用过采样
-            sampling_method: 过采样方法 ('smote' 或 'adasyn')
+            sampling_method: 过采样方法，如果为None则从版本配置中获取
             sampling_strategy: 采样策略 ('auto' 或 'minority' 或 dict)
             min_samples: 每个类别的最小样本数
             cv_folds: 交叉验证折数
@@ -51,7 +51,7 @@ class DataProcessor:
         self.test_size = test_size
         self.random_state = random_state
         self.use_oversampling = use_oversampling
-        self.sampling_method = sampling_method
+        self.sampling_method = sampling_method or self._get_sampling_method_from_version()
         self.sampling_strategy = sampling_strategy
         self.min_samples = min_samples
         self.cv_folds = cv_folds
@@ -60,6 +60,29 @@ class DataProcessor:
         self.logger = logging.getLogger(__name__)
         self.feature_importance = {}
         self.selected_features = {}
+        
+    def _get_sampling_method_from_version(self) -> str:
+        """从版本配置中获取采样方法"""
+        version = VersionConfig.get_version()
+        version_changes = VersionConfig.VERSION_HISTORY[version]['changes']
+        
+        # 根据版本更新记录确定采样方法
+        if "SMOTE" in str(version_changes):
+            return 'smote'
+        elif "ADASYN" in str(version_changes):
+            return 'adasyn'
+        elif "BorderlineSMOTE" in str(version_changes):
+            return 'borderline_smote'
+        elif "SVMSMOTE" in str(version_changes):
+            return 'svm_smote'
+        elif "SMOTETomek" in str(version_changes):
+            return 'smote_tomek'
+        elif "SMOTEENN" in str(version_changes):
+            return 'smote_enn'
+        elif "KMeansSMOTE" in str(version_changes):
+            return 'kmeans_smote'
+        else:
+            return None  # 不使用过采样
         
     def _create_sampling_pipeline(self, n_samples: Dict[int, int], is_soil: bool = True) -> Pipeline:
         """
@@ -72,7 +95,7 @@ class DataProcessor:
         Returns:
             采样pipeline
         """
-        if not self.use_oversampling:
+        if not self.use_oversampling or self.sampling_method is None:
             return None
             
         # 计算采样策略
@@ -286,12 +309,15 @@ class DataProcessor:
             sampling_pipeline = self._create_sampling_pipeline(class_counts, is_soil=True)
             
             # 应用采样
-            with tqdm(total=1, desc="数据采样") as pbar:
-                X_train, y_train = sampling_pipeline.fit_resample(X_train, y_train)
-                pbar.update(1)
-                
-            self.logger.info(f"采样后训练集类别分布: {Counter(y_train)}")
-            self.logger.info(f"采样后训练集形状: {X_train.shape}")
+            if sampling_pipeline is not None:
+                with tqdm(total=1, desc="数据采样") as pbar:
+                    X_train, y_train = sampling_pipeline.fit_resample(X_train, y_train)
+                    pbar.update(1)
+                    
+                self.logger.info(f"采样后训练集类别分布: {Counter(y_train)}")
+                self.logger.info(f"采样后训练集形状: {X_train.shape}")
+            else:
+                self.logger.info("不使用过采样")
         
         load_time = time.time() - start_time
         self.logger.info(f"数据加载完成，耗时: {load_time:.2f}秒")
@@ -345,12 +371,15 @@ class DataProcessor:
             sampling_pipeline = self._create_sampling_pipeline(class_counts, is_soil=False)
             
             # 应用采样
-            with tqdm(total=1, desc="数据采样") as pbar:
-                X_train, y_train = sampling_pipeline.fit_resample(X_train, y_train)
-                pbar.update(1)
-                
-            self.logger.info(f"采样后训练集类别分布: {Counter(y_train)}")
-            self.logger.info(f"采样后训练集形状: {X_train.shape}")
+            if sampling_pipeline is not None:
+                with tqdm(total=1, desc="数据采样") as pbar:
+                    X_train, y_train = sampling_pipeline.fit_resample(X_train, y_train)
+                    pbar.update(1)
+                    
+                self.logger.info(f"采样后训练集类别分布: {Counter(y_train)}")
+                self.logger.info(f"采样后训练集形状: {X_train.shape}")
+            else:
+                self.logger.info("不使用过采样")
         
         load_time = time.time() - start_time
         self.logger.info(f"数据加载完成，耗时: {load_time:.2f}秒")
