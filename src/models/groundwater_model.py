@@ -8,14 +8,16 @@ class GroundwaterModel(BaseModel):
     
     def __init__(
         self,
+        version: str = "1.0.0",
         time_limit: int = 3600,
         presets: str = 'medium_quality',
         eval_metric: str = 'accuracy',
-        n_jobs: int = -1,
+        n_jobs: str = 'auto',
         enable_explanation: bool = True,
         model_type: str = 'groundwater'
     ):
         super().__init__(
+            version=version,
             time_limit=time_limit,
             presets=presets,
             eval_metric=eval_metric,

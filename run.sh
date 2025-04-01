@@ -28,12 +28,17 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # 切换到项目根目录
 cd "$SCRIPT_DIR"
 
+# 设置默认版本
+DEFAULT_VERSION="1.0.0"
+
+# 获取版本参数，如果没有提供则使用默认版本
+VERSION=${1:-$DEFAULT_VERSION}
+
 # 检查Python版本
-python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-print_info "Python版本: $python_version"
+echo "[INFO] Python版本: $(python3 --version | cut -d' ' -f2)"
 
 # 检查并安装依赖
-print_info "检查并安装依赖..."
+echo "[INFO] 检查并安装依赖..."
 pip install -r requirements.txt
 
 # 检查数据目录
@@ -49,11 +54,13 @@ if [ ! -f "data/training/soil_training.csv" ] || [ ! -f "data/training/groundwat
 fi
 
 # 创建必要的目录
-print_info "创建必要的目录..."
-mkdir -p "output/metrics"
-mkdir -p "models/soil"
-mkdir -p "models/groundwater"
-mkdir -p "logs"
+echo "[INFO] 创建必要的目录..."
+mkdir -p models/soil/v${VERSION}
+mkdir -p models/groundwater/v${VERSION}
+mkdir -p output/metrics
+mkdir -p output/soil/v${VERSION}/explanation
+mkdir -p output/groundwater/v${VERSION}/explanation
+mkdir -p logs
 
 # 设置项目根目录
 PROJECT_ROOT="$SCRIPT_DIR"
@@ -62,16 +69,16 @@ PROJECT_ROOT="$SCRIPT_DIR"
 export PYTHONPATH=$PROJECT_ROOT:$PYTHONPATH
 
 # 运行主程序
-print_info "开始运行污染场地智能决策模型系统..."
-python3 src/main.py
+echo "[INFO] 开始运行污染场地智能决策模型系统..."
+python3 src/main.py --version ${VERSION}
 
 # 检查运行结果
 if [ $? -eq 0 ]; then
-    print_info "模型训练和评估完成！"
-    print_info "结果文件保存在 output/ 目录下"
-    print_info "模型文件保存在 models/ 目录下"
-    print_info "日志文件保存在 logs/ 目录下"
+    echo "[INFO] 模型训练和评估完成！"
+    echo "[INFO] 结果文件保存在 output/ 目录下"
+    echo "[INFO] 模型文件保存在 models/ 目录下"
+    echo "[INFO] 日志文件保存在 logs/ 目录下"
 else
-    print_error "程序运行出错，请检查日志文件"
+    echo "[ERROR] 程序运行失败，请检查日志文件"
     exit 1
 fi 

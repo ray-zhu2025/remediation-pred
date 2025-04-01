@@ -6,52 +6,29 @@ from datetime import datetime
 
 class VersionConfig:
     # 当前版本号
-    CURRENT_VERSION = "1.0.5"
+    VERSION = "1.1.6"
     
     # 版本历史记录
     VERSION_HISTORY = {
         "1.0.0": {
             "changes": [
                 "初始版本",
-                "基础模型训练功能",
-                "无采样策略"
+                "使用原始数据分布"
             ]
         },
-        "1.0.1": {
-            "changes": [
-                "添加SMOTE采样策略",
-                "优化模型训练流程"
-            ]
-        },
-        "1.0.2": {
-            "changes": [
-                "添加ADASYN采样策略",
-                "优化采样参数配置"
-            ]
-        },
-        "1.0.3": {
-            "changes": [
-                "添加BorderlineSMOTE采样策略",
-                "优化采样参数配置"
-            ]
-        },
-        "1.0.4": {
+        "1.1.0": {
             "changes": [
                 "添加KMeansSMOTE采样策略",
-                "优化采样参数配置"
+                "土壤数据采样比例提升到95%",
+                "地下水数据采样比例提升到80%"
             ]
         },
-        "1.0.5": {
+        "1.1.6": {
             "changes": [
-                "使用ADASYN采样策略替代KMeansSMOTE",
-                "优化采样参数配置"
-            ],
-            "model_save_path": {
-                "soil": "models/soil/v1.0.5",
-                "groundwater": "models/groundwater/v1.0.5"
-            },
-            "metrics_save_path": "output/metrics",
-            "log_file": "logs/v1.0.5.log"
+                "优化KMeansSMOTE采样策略",
+                "土壤数据采样比例提升到98%",
+                "地下水数据采样比例提升到90%"
+            ]
         }
     }
     
@@ -102,23 +79,41 @@ class VersionConfig:
     
     # 采样策略配置
     SAMPLING_STRATEGIES = {
-        "SMOTE": {
-            "k_neighbors": 5,
-            "random_state": 42
+        'SMOTE': {
+            'random_state': 42,
+            'k_neighbors': 5
         },
-        "ADASYN": {
-            "sampling_strategy": "auto",
-            "random_state": 42,
-            "n_neighbors": 5,
-            "n_jobs": -1
+        'ADASYN': {
+            'random_state': 42,
+            'n_neighbors': 5
         },
-        "BorderlineSMOTE": {
-            "k_neighbors": 5,
-            "random_state": 42
+        'BorderlineSMOTE': {
+            'random_state': 42,
+            'k_neighbors': 5
         },
-        "KMeansSMOTE": {
-            "k_neighbors": 5,
-            "random_state": 42
+        'KMeansSMOTE': {
+            'random_state': 42,
+            'k_neighbors': 5,
+            'cluster_balance_threshold': 0.1
+        }
+    }
+    
+    # 模型参数配置
+    MODEL_PARAMS = {
+        'RandomForest': {
+            'n_estimators': 100,
+            'max_depth': 10,
+            'random_state': 42
+        },
+        'XGBoost': {
+            'n_estimators': 100,
+            'max_depth': 6,
+            'random_state': 42
+        },
+        'LightGBM': {
+            'n_estimators': 100,
+            'max_depth': 6,
+            'random_state': 42
         }
     }
     
@@ -128,7 +123,7 @@ class VersionConfig:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return cls.MODEL_SAVE_PATH_TEMPLATE.format(
             model_type=model_type,
-            version=cls.CURRENT_VERSION,
+            version=cls.VERSION,
             timestamp=timestamp
         )
     
@@ -138,7 +133,7 @@ class VersionConfig:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return cls.LOG_CONFIG["file_template"].format(
             model_type=model_type,
-            version=cls.CURRENT_VERSION,
+            version=cls.VERSION,
             timestamp=timestamp
         )
     
@@ -148,6 +143,6 @@ class VersionConfig:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return cls.METRICS_SAVE_PATH_TEMPLATE.format(
             model_type=model_type,
-            version=cls.CURRENT_VERSION,
+            version=cls.VERSION,
             timestamp=timestamp
         ) 

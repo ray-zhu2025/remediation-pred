@@ -76,23 +76,14 @@ class DataProcessor:
             return None
             
         # 计算采样策略
-        if is_soil:
-            # 土壤数据：只对样本数小于平均值的类别进行轻度过采样
-            mean_samples = np.mean(list(n_samples.values()))
-            sampling_strategy = {}
-            for k, v in n_samples.items():
-                if v < mean_samples:
-                    # 将样本数增加到平均值的80%
-                    sampling_strategy[k] = int(mean_samples * 0.8)
-        else:
-            # 地下水数据：对少数类进行适度过采样
-            max_samples = max(n_samples.values())
-            sampling_strategy = {}
-            for k, v in n_samples.items():
-                if v < max_samples:
-                    # 将样本数增加到最大类的70%
-                    sampling_strategy[k] = int(max_samples * 0.7)
+        # 使用最大类样本数作为目标样本数
+        max_samples = max(n_samples.values())
+        sampling_strategy = {}
+        for k, v in n_samples.items():
+            if v < max_samples:
+                sampling_strategy[k] = max_samples  # 所有类别采样到最大类样本数
                 
+        self.logger.info(f"最大类样本数: {max_samples}")
         self.logger.info(f"采样策略: {sampling_strategy}")
             
         # 创建过采样器，使用更合适的参数
@@ -118,29 +109,14 @@ class DataProcessor:
             over = KMeansSMOTE(
                 sampling_strategy=sampling_strategy,
                 random_state=self.random_state,
-                k_neighbors=min(5, min(n_samples.values()) - 1)  # 增加邻居数
+                k_neighbors=min(5, min(n_samples.values()) - 1),  # 增加邻居数
+                cluster_balance_threshold=0.1  # 更激进的聚类平衡阈值
             )
         else:
             raise ValueError(f"不支持的过采样方法: {self.sampling_method}")
             
-        # 创建欠采样器，只对极度不平衡的类别进行欠采样
-        under_strategy = {}
-        max_ratio = 3  # 允许的最大类别比例
-        max_samples = max(n_samples.values())
-        for k, v in n_samples.items():
-            if v > max_samples / max_ratio:
-                under_strategy[k] = int(max_samples / max_ratio)
-                
-        under = RandomUnderSampler(
-            sampling_strategy=under_strategy if under_strategy else 'not minority',
-            random_state=self.random_state
-        )
-        
-        # 创建pipeline
-        steps = [('over', over)]
-        if under_strategy:
-            steps.append(('under', under))
-        return Pipeline(steps=steps)
+        # 返回只包含过采样的pipeline
+        return Pipeline(steps=[('over', over)])
         
     def _select_features(self, data: pd.DataFrame, dataset_type: str) -> pd.DataFrame:
         """
@@ -209,7 +185,7 @@ class DataProcessor:
         if dataset_type == 'soil':
             # 土壤数据需要过滤的特征
             soil_drop_columns = [
-                '修复时间', '费用', '修复面积', '修复土方量', '修复成本'
+                '修复时间', '修复时间.1','费用', '修复面积', '修复土方量', '修复成本'
             ]
             columns_to_drop.extend(soil_drop_columns)
         else:
