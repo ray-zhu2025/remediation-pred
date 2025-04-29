@@ -50,7 +50,7 @@ def main():
         groundwater_data = processor.load_groundwater_data()
         
         # 训练土壤模型
-        soil_model = SoilModel(model_type=config['model_type'], version=args.version)
+        soil_model = SoilModel(version=args.version)
         soil_model.train(
             soil_data['X_train'], 
             soil_data['y_train'],
@@ -60,7 +60,7 @@ def main():
         soil_metrics = soil_model.evaluate(soil_data['X_test'], soil_data['y_test'])
         
         # 训练地下水模型
-        groundwater_model = GroundwaterModel(model_type=config['model_type'], version=args.version)
+        groundwater_model = GroundwaterModel(version=args.version)
         groundwater_model.train(
             groundwater_data['X_train'],
             groundwater_data['y_train'],

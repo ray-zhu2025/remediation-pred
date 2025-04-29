@@ -57,6 +57,56 @@ class BaseModel:
             # 使用主程序的日志处理器
             self.logger.handlers = logging.getLogger('__main__').handlers
         
+    def _get_path(self, base_dir: str, suffix: str) -> str:
+        """生成带时间戳的路径"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return os.path.join(
+            base_dir,
+            self.model_type,
+            f"v{self.version}",
+            f"{timestamp}{suffix}"
+        )
+        
+    def _log_system_info(self):
+        """记录系统信息"""
+        import psutil
+        
+        # 获取内存信息
+        memory = psutil.virtual_memory()
+        self.logger.info(f"系统内存: 总计={memory.total/1024/1024/1024:.1f}GB, "
+                        f"可用={memory.available/1024/1024/1024:.1f}GB, "
+                        f"使用率={memory.percent}%")
+                        
+    def _get_model_performance(self) -> List[Dict[str, Any]]:
+        """获取所有模型的性能指标"""
+        if self.predictor is None:
+            raise ValueError("模型未训练")
+            
+        leaderboard = self.predictor.leaderboard()
+        model_info = []
+        for _, row in leaderboard.iterrows():
+            model_info.append({
+                'model_name': row['model'],
+                'validation_score': row['score_val'],
+                'fit_time': row['fit_time']
+            })
+        return model_info
+        
+    def _save_metrics(self, metrics):
+        """保存评估指标"""
+        # 创建保存目录
+        save_dir = f'output/metrics/{self.model_type}'
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        save_path = f'{save_dir}/model_metrics_v{VersionConfig.get_version()}_{timestamp}.json'
+        
+        # 保存指标
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(metrics, f, ensure_ascii=False, indent=2)
+        self.logger.info(f"评估指标已保存到: {save_path}")
+        
     def train(self, X_train, y_train, X_test, y_test):
         """训练模型"""
         self.logger.info("开始训练模型...")
@@ -231,60 +281,4 @@ class BaseModel:
         plt.savefig(save_path)
         plt.close()
         
-        self.logger.info(f"特征重要性图已保存到: {save_path}")
-        
-    def _log_system_info(self):
-        """记录系统信息"""
-        import psutil
-        
-        # 获取内存信息
-        memory = psutil.virtual_memory()
-        self.logger.info(f"系统内存: 总计={memory.total/1024/1024/1024:.1f}GB, "
-                        f"可用={memory.available/1024/1024/1024:.1f}GB, "
-                        f"使用率={memory.percent}%")
-                        
-        # 获取磁盘信息
-        disk = psutil.disk_usage('/')
-        self.logger.info(f"磁盘空间: 总计={disk.total/1024/1024/1024:.1f}GB, "
-                        f"可用={disk.free/1024/1024/1024:.1f}GB, "
-                        f"使用率={disk.percent}%")
-                        
-    def _get_path(self, base_dir: str, suffix: str) -> str:
-        """生成带时间戳的路径"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return os.path.join(
-            base_dir,
-            self.model_type,
-            f"v{self.version}",
-            f"{timestamp}{suffix}"
-        )
-        
-    def _save_metrics(self, metrics):
-        """保存评估指标"""
-        # 创建保存目录
-        save_dir = f'output/metrics/{self.model_type}'
-        os.makedirs(save_dir, exist_ok=True)
-        
-        # 生成文件名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        save_path = f'{save_dir}/model_metrics_v{VersionConfig.get_version()}_{timestamp}.json'
-        
-        # 保存指标
-        with open(save_path, 'w', encoding='utf-8') as f:
-            json.dump(metrics, f, ensure_ascii=False, indent=2)
-        self.logger.info(f"评估指标已保存到: {save_path}")
-        
-    def _get_model_performance(self) -> List[Dict[str, Any]]:
-        """获取所有模型的性能指标"""
-        if self.predictor is None:
-            raise ValueError("模型未训练")
-            
-        leaderboard = self.predictor.leaderboard()
-        model_info = []
-        for _, row in leaderboard.iterrows():
-            model_info.append({
-                'model_name': row['model'],
-                'validation_score': row['score_val'],
-                'fit_time': row['fit_time']
-            })
-        return model_info 
+        self.logger.info(f"特征重要性图已保存到: {save_path}") 

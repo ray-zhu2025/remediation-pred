@@ -60,7 +60,6 @@ mkdir -p models/groundwater/v${VERSION}
 mkdir -p output/metrics
 mkdir -p output/soil/v${VERSION}/explanation
 mkdir -p output/groundwater/v${VERSION}/explanation
-mkdir -p logs
 
 # 设置项目根目录
 PROJECT_ROOT="$SCRIPT_DIR"
