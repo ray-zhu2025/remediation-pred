@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README_zh.md)
+
 # 污染场地智能决策模型
 
 ## 项目概述
@@ -88,4 +90,4 @@ python run_all_versions.py
 - 评估指标保存在 `output/metrics/` 目录
 
 ## 许可证
-MIT License 
+GNU Lesser General Public License v2.1 (LGPL-2.1) 
