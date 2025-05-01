@@ -67,6 +67,11 @@ output/docs/
 *.png
 
 # Project specific
-models/
-output/
-logs/
+models/*
+!models/.gitkeep
+
+data/*
+!data/.gitkeep
+
+output/*
+!output/.gitkeep
