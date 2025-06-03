@@ -9,10 +9,15 @@ def run_version(version):
     
 def collect_metrics():
     metrics = {}
-    for version in os.listdir("output/metrics"):
-        if version.startswith("v"):
-            with open(f"output/metrics/{version}/metrics.json", "r") as f:
-                metrics[version] = json.load(f)
+    metrics_dir = "output/metrics"
+    for fname in os.listdir(metrics_dir):
+        if fname.startswith("model_metrics_v") and fname.endswith(".json"):
+            # 提取版本号
+            parts = fname.split("_")
+            version = parts[2] if len(parts) > 2 else "unknown"
+            with open(os.path.join(metrics_dir, fname), "r") as f:
+                data = json.load(f)
+            metrics[version] = data
     return metrics
 
 def main():
@@ -34,10 +39,8 @@ def main():
     print("\nMetrics Summary:")
     for version, data in metrics.items():
         print(f"\nVersion {version}:")
-        print(f"  Accuracy: {data['accuracy']:.4f}")
-        print(f"  Precision: {data['precision']:.4f}")
-        print(f"  Recall: {data['recall']:.4f}")
-        print(f"  F1 Score: {data['f1_score']:.4f}")
+        print(f"  Soil Model Accuracy: {data['soil']['accuracy']:.4f}")
+        print(f"  Groundwater Model Accuracy: {data['groundwater']['accuracy']:.4f}")
 
 if __name__ == "__main__":
     main() 

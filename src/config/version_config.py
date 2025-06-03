@@ -21,37 +21,37 @@ class VersionConfig:
         },
         "1.1.0": {
             "date": "2024-03-28",
-            "changes": "切换到LightGBM模型",
+            "changes": "smote",
             "sampling_method": "smote"
         },
         "1.1.1": {
             "date": "2024-03-29",
-            "changes": "切换到CatBoost模型",
+            "changes": "adasyn",
             "sampling_method": "adasyn"
         },
         "1.1.2": {
             "date": "2024-03-30",
-            "changes": "切换到RandomForest模型",
+            "changes": "borderline_smote",
             "sampling_method": "borderline_smote"
         },
         "1.1.3": {
             "date": "2024-03-31",
-            "changes": "优化特征工程",
+            "changes": "svm_smote",
             "sampling_method": "svm_smote"
         },
         "1.1.4": {
             "date": "2024-04-01",
-            "changes": "优化模型参数",
+            "changes": "smote_tomek",
             "sampling_method": "smote_tomek"
         },
         "1.1.5": {
             "date": "2024-04-02",
-            "changes": "添加模型集成",
+            "changes": "smote_enn",
             "sampling_method": "smote_enn"
         },
         "1.1.6": {
             "date": "2024-04-03",
-            "changes": "优化模型集成策略",
+            "changes": "kmeans_smote",
             "sampling_method": "kmeans_smote"
         }
     }

@@ -39,7 +39,7 @@ echo "[INFO] Python版本: $(python3 --version | cut -d' ' -f2)"
 
 # 检查并安装依赖
 echo "[INFO] 检查并安装依赖..."
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # 检查数据目录
 if [ ! -d "data" ]; then

@@ -46,6 +46,7 @@
 
 ## 环境要求
 - Python 3.8+
+- uv (Python包管理器)
 - 依赖包见 requirements.txt
 
 ## 安装步骤
@@ -55,17 +56,19 @@ git clone https://github.com/ray-zhu2025/remediation-classification.git
 cd remediation-classification
 ```
 
-2. 创建虚拟环境
+2. 安装 uv
 ```bash
-python -m venv .venv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+3. 创建虚拟环境并安装依赖
+```bash
+uv venv
 source .venv/bin/activate  # Linux/Mac
 # 或
 .venv\Scripts\activate  # Windows
-```
 
-3. 安装依赖
-```bash
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 ```
 
 ## 使用方法
@@ -83,6 +86,24 @@ python run_all_versions.py
 ```bash
 ./run.sh
 ```
+
+### 脚本调用关系
+脚本采用层级结构组织：
+
+```
+run_all_versions.py
+    └── run.sh
+        └── src/main.py
+            ├── 数据处理
+            ├── 模型训练
+            └── 结果保存
+```
+
+- `run.sh`: 顶层入口脚本，负责环境设置和调用 main.py
+- `run_all_versions.py`: 批量处理脚本，运行多个版本（1.0.0 到 1.1.6）
+- `src/main.py`: 核心程序，处理数据、训练模型和保存结果
+
+每个版本的结果独立保存，包含完整的日志和评估指标。
 
 ## 输出说明
 - 模型保存在 `src/models/` 目录

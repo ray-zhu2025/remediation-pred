@@ -46,6 +46,7 @@ This project is a machine learning-based intelligent decision system for contami
 
 ## Environment Requirements
 - Python 3.8+
+- uv (Python package manager)
 - Dependencies listed in requirements.txt
 
 ## Installation
@@ -55,17 +56,19 @@ git clone https://github.com/ray-zhu2025/remediation-classification.git
 cd remediation-classification
 ```
 
-2. Create virtual environment
+2. Install uv
 ```bash
-python -m venv .venv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+3. Create virtual environment and install dependencies
+```bash
+uv venv
 source .venv/bin/activate  # Linux/Mac
 # or
 .venv\Scripts\activate  # Windows
-```
 
-3. Install dependencies
-```bash
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 ```
 
 ## Usage
@@ -84,13 +87,23 @@ python run_all_versions.py
 ./run.sh
 ```
 
+### Script Call Hierarchy
+The scripts are organized in a hierarchical structure:
+
+```
+run_all_versions.py
+    └── run.sh
+        └── src/main.py
+            ├── Data Processing
+            ├── Model Training
+            └── Results Saving
+```
+
+- `run.sh`: Top-level entry script that handles environment setup and calls main.py
+- `run_all_versions.py`: Batch processing script that runs multiple versions (1.0.0 to 1.1.6)
+- `src/main.py`: Core program that handles data processing, model training, and result saving
+
+Each version's results are saved independently with complete logging and evaluation metrics.
+
 ## Output
 - Models saved in `src/models/`
-- Logs saved in `output/logs/`
-- Evaluation metrics saved in `output/metrics/`
-
-## Documentation
-- [中文文档 (Chinese Documentation)](README_zh.md)
-
-## License
-GNU Lesser General Public License v2.1 (LGPL-2.1) 
