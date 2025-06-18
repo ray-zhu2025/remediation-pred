@@ -185,30 +185,25 @@ class BaseModel:
         predictions = self.predictor.predict(test_data)
         return predictions.values
         
-    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
-        """评估模型性能"""
+    def evaluate(self, X_test, y_test) -> Dict[str, Any]:
+        """统一评估模型性能"""
+        import numpy as np
+        from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
         # 确保输入数据格式正确
-        if not isinstance(X_test, pd.DataFrame):
-            X_test = pd.DataFrame(X_test)
-        if not isinstance(y_test, pd.Series):
-            y_test = pd.Series(y_test)
-            
-        # 预测
-        y_pred = self.predictor.predict(X_test)
-        
-        # 计算评估指标
+        if hasattr(X_test, 'values'):
+            X = X_test.values
+        else:
+            X = X_test
+        if hasattr(y_test, 'values'):
+            y = y_test.values
+        else:
+            y = y_test
+        y_pred = self.predict(X)
         metrics = {
-            'accuracy': accuracy_score(y_test, y_pred),
-            'classification_report': classification_report(y_test, y_pred, output_dict=True),
-            'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
-            'model_info': {
-                'version': self.version,
-                'type': self.model_type,
-                'best_model': self.predictor.model_best,
-                'all_models': self._get_model_performance()
-            }
+            'accuracy': accuracy_score(y, y_pred),
+            'classification_report': classification_report(y, y_pred, output_dict=True),
+            'confusion_matrix': confusion_matrix(y, y_pred).tolist() if isinstance(confusion_matrix(y, y_pred), np.ndarray) else confusion_matrix(y, y_pred)
         }
-        
         return metrics
         
     def get_model_info(self, detailed: bool = False) -> Dict:

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 设置错误时立即退出
+# 设置错误处理
 set -e
 
 # 颜色定义
@@ -25,6 +25,9 @@ print_error() {
 # 获取脚本所在目录的绝对路径
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# 设置Python路径
+export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
+
 # 切换到项目根目录
 cd "$SCRIPT_DIR"
 
@@ -35,41 +38,100 @@ DEFAULT_VERSION="1.0.0"
 VERSION=${1:-$DEFAULT_VERSION}
 
 # 检查Python版本
-echo "[INFO] Python版本: $(python3 --version | cut -d' ' -f2)"
+echo -e "${YELLOW}[INFO] 检查Python版本...${NC}"
+if ! command -v python &> /dev/null; then
+    echo -e "${RED}[ERROR] 未找到Python${NC}"
+    exit 1
+fi
+echo -e "${GREEN}[INFO] Python版本: $(python --version | cut -d' ' -f2)${NC}"
+
+# 检查uv是否安装
+if ! command -v uv &> /dev/null; then
+    echo -e "${RED}[ERROR] 未找到uv，请先安装uv${NC}"
+    echo -e "${YELLOW}[INFO] 可以使用以下命令安装uv：${NC}"
+    echo -e "${YELLOW}[INFO] curl -LsSf https://astral.sh/uv/install.sh | sh${NC}"
+    exit 1
+fi
 
 # 检查并安装依赖
-echo "[INFO] 检查并安装依赖..."
-uv pip install -r requirements.txt
+echo -e "${YELLOW}[INFO] 检查并安装依赖...${NC}"
+uv pip install tabpfn>=2.0.9 imbalanced-learn scikit-learn pandas numpy
 
 # 检查数据目录
 if [ ! -d "data" ]; then
-    print_error "data目录不存在，请确保数据文件已放置正确"
+    echo -e "${RED}[ERROR] 未找到数据目录${NC}"
     exit 1
 fi
 
 # 检查数据文件
-if [ ! -f "data/training/soil_training.csv" ] || [ ! -f "data/training/groundwater_training.csv" ]; then
-    print_error "训练数据文件不存在，请确保数据文件已放置正确"
+required_files=(
+    "data/training/soil_training.csv"
+    "data/training/groundwater_training.csv"
+)
+
+for file in "${required_files[@]}"; do
+    if [ ! -f "$file" ]; then
+        echo -e "${RED}[ERROR] 未找到数据文件: $file${NC}"
+        exit 1
+    fi
+done
+
+# 创建必要的目录
+directories=(
+    "models"
+    "models/soil"
+    "models/groundwater"
+    "output"
+    "output/logs"
+    "output/metrics"
+    "output/plots"
+)
+
+for dir in "${directories[@]}"; do
+    if [ ! -d "$dir" ]; then
+        echo -e "${YELLOW}[INFO] 创建目录: $dir${NC}"
+        mkdir -p "$dir"
+    fi
+done
+
+# 运行模型
+echo -e "${YELLOW}[INFO] 开始运行模型...${NC}"
+
+# 获取命令行参数
+MODEL_TYPE="autogluon"  # 默认使用AutoGluon
+
+# 解析命令行参数
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --model_type)
+            MODEL_TYPE="$2"
+            shift 2
+            ;;
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
+        *)
+            echo -e "${RED}[ERROR] 未知参数: $1${NC}"
+            exit 1
+            ;;
+    esac
+done
+
+# 验证模型类型
+if [[ "$MODEL_TYPE" != "autogluon" && "$MODEL_TYPE" != "tabpfn" ]]; then
+    echo -e "${RED}[ERROR] 不支持的模型类型: $MODEL_TYPE${NC}"
+    echo -e "${YELLOW}支持的模型类型: autogluon, tabpfn${NC}"
     exit 1
 fi
 
-# 创建必要的目录
-echo "[INFO] 创建必要的目录..."
-mkdir -p models/soil/v${VERSION}
-mkdir -p models/groundwater/v${VERSION}
-mkdir -p output/metrics
-mkdir -p output/soil/v${VERSION}/explanation
-mkdir -p output/groundwater/v${VERSION}/explanation
-
-# 设置项目根目录
-PROJECT_ROOT="$SCRIPT_DIR"
-
-# 设置Python路径
-export PYTHONPATH=$PROJECT_ROOT:$PYTHONPATH
+echo -e "${GREEN}[INFO] 使用模型类型: $MODEL_TYPE${NC}"
+echo -e "${GREEN}[INFO] 使用版本: $VERSION${NC}"
 
 # 运行主程序
-echo "[INFO] 开始运行污染场地智能决策模型系统..."
-python3 src/main.py --version ${VERSION}
+python src/main.py --version "$VERSION" --model_type "$MODEL_TYPE"
+
+echo -e "${GREEN}[INFO] 模型运行完成${NC}"
 
 # 检查运行结果
 if [ $? -eq 0 ]; then

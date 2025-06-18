@@ -1,11 +1,12 @@
-numpy>=1.25.0
-pandas>=2.0.0
-scikit-learn>=1.4.0
+autogluon.tabular>=1.2.0
+numpy>=1.19.2
+pandas>=1.2.0
+scikit-learn>=0.24.0
 matplotlib>=3.7.0
-autogluon.tabular[fastai]==1.2
 shap>=0.43.0
 tqdm>=4.38.0
 seaborn>=0.11.2
 openpyxl>=3.0.0  # 用于读取 Excel 文件
 typing-extensions>=4.0.0  # 增强的类型提示支持
-imbalanced-learn 
+imbalanced-learn>=0.10.0
+tabpfn>=2.0.9  # TabPFN模型支持 

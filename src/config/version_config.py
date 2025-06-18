@@ -226,6 +226,33 @@ class VersionConfig:
             'n_estimators': 100,
             'max_depth': 6,
             'random_state': 42
+        },
+        'TabPFN': {
+            'device': 'cpu',
+            'N_ensemble_configurations': 32,
+            'batch_size_inference': 1024,
+            'normalize_features': True,
+            'feature_importance': True,
+            'base_path': None,
+            'c': 1.0,
+            'seed': 42,
+            'max_num_features': 1000,
+            'eval_positions': None,
+            'verbose': True
+        }
+    }
+    
+    # 模型类型配置
+    MODEL_TYPES = {
+        'autogluon': {
+            'soil': 'DomainModel',
+            'groundwater': 'DomainModel',
+            'save_model': True
+        },
+        'tabpfn': {
+            'soil': 'DomainTabPFNModel',
+            'groundwater': 'DomainTabPFNModel',
+            'save_model': False  # TabPFN是预训练模型，不需要保存
         }
     }
     
